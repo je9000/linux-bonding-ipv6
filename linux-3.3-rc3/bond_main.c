@@ -3395,9 +3395,9 @@ static int bond_xmit_hash_policy_l34(struct sk_buff *skb, int count)
 		if (!ip_is_fragment(iph) &&
 			(iph->protocol == IPPROTO_TCP ||
 			iph->protocol == IPPROTO_UDP)) {
+			__be16 *layer4hdr = (__be16 *)((u32 *)iph + iph->ihl);
 			if (iph->ihl * sizeof(u32) + sizeof(__be16) * 2 >
 				skb_headlen(skb) - skb_network_offset(skb)) goto SHORT_HEADER;
-			__be16 *layer4hdr = (__be16 *)((u32 *)iph + iph->ihl);
 			layer4_xor = ntohs((*layer4hdr ^ *(layer4hdr + 1)));
 		} else if (skb_network_header_len(skb) < sizeof(struct iphdr)) {
 			goto SHORT_HEADER;
@@ -3407,9 +3407,9 @@ static int bond_xmit_hash_policy_l34(struct sk_buff *skb, int count)
 	} else if (skb->protocol == htons(ETH_P_IPV6)) {
 		struct ipv6hdr *ipv6h = ipv6_hdr(skb);
 		if (ipv6h->nexthdr == IPPROTO_TCP || ipv6h->nexthdr == IPPROTO_UDP) {
+			__be16 *layer4hdrv6 = (__be16 *)((u8 *)ipv6h + sizeof(struct ipv6hdr));
 			if (sizeof(struct ipv6hdr) + sizeof(__be16) * 2 >
 				skb_headlen(skb) - skb_network_offset(skb)) goto SHORT_HEADER;
-			__be16 *layer4hdrv6 = (__be16 *)((u8 *)ipv6h + sizeof(struct ipv6hdr));
 			layer4_xor = (*layer4hdrv6 ^ *(layer4hdrv6 + 1));
 		} else if (skb_network_header_len(skb) < sizeof(struct ipv6hdr)) {
 			goto SHORT_HEADER;
