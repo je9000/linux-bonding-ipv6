@@ -1,6 +1,26 @@
---- a/drivers/net/bonding/bond_main.c	2012-02-13 02:42:31.000000000 -0800
-+++ b/drivers/net/bonding/bond_main.c	2012-02-13 02:42:55.000000000 -0800
-@@ -3358,14 +3358,26 @@
+--- a/drivers/net/bonding/bond_main.c	2012-03-18 16:15:34.000000000 -0700
++++ b/drivers/net/bonding/bond_main.c	2012-04-14 20:23:26.000000000 -0700
+@@ -3352,56 +3352,87 @@
+ /*---------------------------- Hashing Policies -----------------------------*/
+ 
+ /*
++ * Hash for the output device based upon layer 2 data
++ */
++static int bond_xmit_hash_policy_l2(struct sk_buff *skb, int count)
++{
++	struct ethhdr *data = (struct ethhdr *)skb->data;
++
++	if (skb_headlen(skb) >= 6)
++		return (data->h_dest[5] ^ data->h_source[5]) % count;
++
++	return 0;
++}
++
++/*
+  * Hash for the output device based upon layer 2 and layer 3 data. If
+- * the packet is not IP mimic bond_xmit_hash_policy_l2()
++ * the packet is not IP, fall back on bond_xmit_hash_policy_l2()
+  */
  static int bond_xmit_hash_policy_l23(struct sk_buff *skb, int count)
  {
  	struct ethhdr *data = (struct ethhdr *)skb->data;
@@ -24,16 +44,18 @@
  	}
  
 -	return (data->h_dest[5] ^ data->h_source[5]) % count;
-+	if (skb_headlen(skb) >= 6)
-+		return (data->h_dest[5] ^ data->h_source[5]) % count;
-+	return 0;
++	return bond_xmit_hash_policy_l2(skb, count);
  }
  
  /*
-@@ -3376,22 +3388,43 @@
+  * Hash for the output device based upon layer 3 and layer 4 data. If
+  * the packet is a frag or not TCP or UDP, just use layer 3 data.  If it is
+- * altogether not IP, mimic bond_xmit_hash_policy_l2()
++ * altogether not IP, fall back on bond_xmit_hash_policy_l2()
+  */
  static int bond_xmit_hash_policy_l34(struct sk_buff *skb, int count)
  {
- 	struct ethhdr *data = (struct ethhdr *)skb->data;
+-	struct ethhdr *data = (struct ethhdr *)skb->data;
 -	struct iphdr *iph = ip_hdr(skb);
 -	__be16 *layer4hdr = (__be16 *)((u32 *)iph + iph->ihl);
 -	int layer4_xor = 0;
@@ -56,9 +78,6 @@
  		return (layer4_xor ^
  			((ntohl(iph->saddr ^ iph->daddr)) & 0xffff)) % count;
 -
--	}
--
--	return (data->h_dest[5] ^ data->h_source[5]) % count;
 +	} else if (skb->protocol == htons(ETH_P_IPV6)) {
 +		struct ipv6hdr *ipv6h = ipv6_hdr(skb);
 +		if (ipv6h->nexthdr == IPPROTO_TCP || ipv6h->nexthdr == IPPROTO_UDP) {
@@ -74,12 +93,21 @@
 +			(ipv6h->saddr.s6_addr32[2] ^ ipv6h->daddr.s6_addr32[2]) ^
 +			(ipv6h->saddr.s6_addr32[3] ^ ipv6h->daddr.s6_addr32[3]);
 +		return ((layer4_xor >> 16) ^ (layer4_xor >> 8) ^ layer4_xor) % count;
-+	}
-+
+ 	}
+ 
+-	return (data->h_dest[5] ^ data->h_source[5]) % count;
+-}
+-
+-/*
+- * Hash for the output device based upon layer 2 data
+- */
+-static int bond_xmit_hash_policy_l2(struct sk_buff *skb, int count)
+-{
+-	struct ethhdr *data = (struct ethhdr *)skb->data;
+-
+-	return (data->h_dest[5] ^ data->h_source[5]) % count;
 +	SHORT_HEADER:
-+	if (skb_headlen(skb) >= 6)
-+		return (data->h_dest[5] ^ data->h_source[5]) % count;
-+	return 0;
++	return bond_xmit_hash_policy_l2(skb, count);
  }
  
- /*
+ /*-------------------------- Device entry points ----------------------------*/
